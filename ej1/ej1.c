@@ -12,7 +12,7 @@
 string_proc_list* string_proc_list_create(void) {
     string_proc_list* list = malloc(sizeof(string_proc_list));
     if (list == NULL) {
-        return; // Manejo de error si no se pudo reservar memoria
+        return NULL; // Manejo de error si no se pudo reservar memoria
     }
     list->first = NULL;
     list->last = NULL;
