@@ -1,4 +1,13 @@
 #include "ej1.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#define _POSIX_C_SOURCE 200809L
+#include <string.h>
+#include <assert.h>
+#include <stdbool.h>
+
+
 
 string_proc_list* string_proc_list_create(void) {
     string_proc_list* list = malloc(sizeof(string_proc_list));
