@@ -1,8 +1,8 @@
+#define _POSIX_C_SOURCE 200809L
 #include "ej1.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#define _POSIX_C_SOURCE 200809L
 #include <string.h>
 #include <assert.h>
 #include <stdbool.h>
