@@ -45,41 +45,27 @@ void string_proc_list_add_node(string_proc_list* list, uint8_t type, char* hash)
 }
 
 char* string_proc_list_concat(string_proc_list* list, uint8_t type, char* hash) {
-    /* Si la lista está vacía, creamos el primer nodo */
-    if (list->first == NULL) {
-        string_proc_node* node = malloc(sizeof(*node));
-        if (!node) return NULL;  /* falla al reservar memoria */
-        node->previous = node->next = NULL;
-        node->type     = type;
-        node->hash     = strdup_safe(hash);
-        list->first = list->last = node;
-        return node->hash;
+    if (list == NULL || hash == NULL) return NULL;
+
+    char* resultado = malloc(strlen(hash) + 1);
+    if (resultado == NULL) return NULL;
+
+    strcpy(resultado, hash);
+
+    string_proc_node* actual = list->first;
+    while (actual != NULL) {
+        if (actual->type == type && actual->hash != NULL) {
+            char* resultado_nuevo = str_concat(resultado, actual->hash);
+            free(resultado);
+            if (resultado_nuevo == NULL) return NULL;
+            resultado = resultado_nuevo;
+        }
+        actual = actual->next;
     }
 
-    /* Si el último nodo tiene el mismo tipo, concatenamos hashes */
-    if (list->last->type == type) {
-        char* nueva_hash = malloc(strlen(list->last->hash) + strlen(hash) + 1);
-        if (!nueva_hash) return NULL;
-        strcpy(nueva_hash,      list->last->hash);
-        strcat(nueva_hash, hash);
-
-        free(list->last->hash);
-        list->last->hash = nueva_hash;
-        return list->last->hash;
-    }
-
-    /* Si el tipo es distinto, añadimos un nuevo nodo al final */
-    string_proc_node* node = malloc(sizeof(*node));
-    if (!node) return NULL;
-    node->previous = list->last;
-    node->next     = NULL;
-    node->type     = type;
-    node->hash     = strdup_safe(hash);
-
-    list->last->next = node;
-    list->last       = node;
-    return node->hash;
+    return resultado;
 }
+
 
 
 /** AUX FUNCTIONS **/
