@@ -1,12 +1,5 @@
-#define _POSIX_C_SOURCE 200809L
 #include "ej1.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
-#include <assert.h>
-#include <stdbool.h>
-
 
 
 string_proc_list* string_proc_list_create(void) {
@@ -27,15 +20,19 @@ string_proc_node* string_proc_node_create(uint8_t type, char* hash){
 	node->next = NULL;
 	node->previous = NULL;
 	node->type = type;
-	node->hash = strdup(hash); // Copia el hash a la memoria del nodo
+	node->hash = hash; // Copia el hash a la memoria del nodo
 	return node;
 }
 
 void string_proc_list_add_node(string_proc_list* list, uint8_t type, char* hash){
+    if (list == NULL) {
+        return; // Manejo de error si la lista es NULL
+    }
 	string_proc_node* node = string_proc_node_create(type, hash);
 	if (node == NULL) {
 		return; // Manejo de error si no se pudo crear el nodo
 	}
+
 	if (list->first == NULL) {
 		list->first = node;
 		list->last = node;
@@ -48,39 +45,41 @@ void string_proc_list_add_node(string_proc_list* list, uint8_t type, char* hash)
 }
 
 char* string_proc_list_concat(string_proc_list* list, uint8_t type, char* hash) {
-    // Inicializamos la cadena resultado:
-    // Si hash no es NULL, se utiliza strdup para copiar su contenido.
-    // Si es NULL, se reserva un espacio para una cadena vacía.
-    char* result;
-    if (hash != NULL) {
-        result = strdup(hash);
-    } else {
-        result = malloc(1);
-        if (result) {
-            result[0] = '\0';
-        }
+    /* Si la lista está vacía, creamos el primer nodo */
+    if (list->first == NULL) {
+        string_proc_node* node = malloc(sizeof(*node));
+        if (!node) return NULL;  /* falla al reservar memoria */
+        node->previous = node->next = NULL;
+        node->type     = type;
+        node->hash     = strdup_safe(hash);
+        list->first = list->last = node;
+        return node->hash;
     }
-    
-    // Si la lista es válida, recorremos cada nodo
-    if (list != NULL) {
-        string_proc_node* current = list->first;
-        while (current != NULL) {
-            // Solo procesamos los nodos que tengan el tipo especificado.
-            if (current->type == type) {
-                // Concatenamos la cadena acumulada con la cadena del nodo.
-                char* temp = str_concat(result, current->hash);
-                // Liberamos la memoria de la cadena previa para evitar fugas.
-                free(result);
-                result = temp;
-            }
-            current = current->next;
-        }
-    }
-    
-    // Retornamos la cadena resultado, que deberá ser liberada por el usuario.
-    return result;
-}
 
+    /* Si el último nodo tiene el mismo tipo, concatenamos hashes */
+    if (list->last->type == type) {
+        char* nueva_hash = malloc(strlen(list->last->hash) + strlen(hash) + 1);
+        if (!nueva_hash) return NULL;
+        strcpy(nueva_hash,      list->last->hash);
+        strcat(nueva_hash, hash);
+
+        free(list->last->hash);
+        list->last->hash = nueva_hash;
+        return list->last->hash;
+    }
+
+    /* Si el tipo es distinto, añadimos un nuevo nodo al final */
+    string_proc_node* node = malloc(sizeof(*node));
+    if (!node) return NULL;
+    node->previous = list->last;
+    node->next     = NULL;
+    node->type     = type;
+    node->hash     = strdup_safe(hash);
+
+    list->last->next = node;
+    list->last       = node;
+    return node->hash;
+}
 
 
 /** AUX FUNCTIONS **/
