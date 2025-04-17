@@ -2,7 +2,15 @@
 #include <string.h>
 // Manejo de error si no se pudo reservar memoria
 
-
+string_proc_list* string_proc_list_create(void) {
+    string_proc_list* list = malloc(sizeof(string_proc_list));
+    if (list == NULL) {
+        return NULL; 
+    }
+    list->first = NULL;
+    list->last = NULL;
+    return list;
+}
 
 string_proc_node* string_proc_node_create(uint8_t type, char* hash){
 	string_proc_node* node = malloc(sizeof(string_proc_node));

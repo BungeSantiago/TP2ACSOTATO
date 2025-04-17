@@ -7,221 +7,193 @@ section .data
 
 section .text
 
-global string_proc_list_create_asm
-global string_proc_node_create_asm
-global string_proc_list_add_node_asm
-global string_proc_list_concat_asm
+    global string_proc_list_create_asm
+    global string_proc_node_create_asm
+    global string_proc_list_add_node_asm
+    global string_proc_list_concat_asm
 
-; FUNCIONES auxiliares que pueden llegar a necesitar:
-extern malloc
-extern free
-extern str_concat
+    ; FUNCIONES auxiliares
+    extern malloc
+    extern free
+    extern strlen
+    extern strcpy
+    extern str_concat
 
-
+; -------------------------------------------------------------------------
+; string_proc_list_create_asm
+;   string_proc_list* string_proc_list_create_asm(void)
+; -------------------------------------------------------------------------
 string_proc_list_create_asm:
-    endbr64                  ; instrucción CET (opcional)
-    push    rbp
-    mov     rbp, rsp
-
-    ; --- malloc(sizeof(string_proc_list)) ---
-    mov     edi, 16          ; tamaño: 2 punteros = 16 bytes
+    ; malloc(sizeof(string_proc_list))  → 2 punteros = 16 bytes
+    mov     edi, 16
     call    malloc
     test    rax, rax
-    je      .L_null          ; si RAX==0, reserva falló
+    je      .return_null_list
 
-    ; --- list->first = NULL ---
-    mov     QWORD [rax], 0
-
-    ; --- list->last = NULL ---
-    mov     QWORD [rax + 8], 0
-
-    jmp     .L_end
-
-.L_null:
-    xor     rax, rax         ; devuelve NULL
-
-.L_end:
-    pop     rbp
+    ; inicializar campos: first = NULL, last = NULL
+    mov     qword [rax + 0], 0
+    mov     qword [rax + 8], 0
     ret
 
-    
-string_proc_list_add_node:
-    endbr64                  ; instrucción CET (opcional)
-    push    rbp
-    mov     rbp, rsp
+.return_null_list:
+    xor     rax, rax
+    ret
 
-    ; 1) if (list == NULL) return;
-    test    rdi, rdi
-    je      .L_return
+; -------------------------------------------------------------------------
+; string_proc_node_create_asm
+;   string_proc_node* string_proc_node_create_asm(uint8_t type, char* hash)
+; -------------------------------------------------------------------------
+string_proc_node_create_asm:
+    ; guardar args
+    mov     edx, edi        ; DL = type
+    mov     rcx, rsi        ; RCX = hash pointer
 
-    ; 2) node = string_proc_node_create(type, hash);
-    ;    argumentos para la llamada:
-    ;      edi = (uint32_t) type  ← viene en sil (RSI low byte)
-    ;      rsi = hash pointer    ← viene en rdx
-    movzx   edi, sil          ; edi = zero-extend(type)
-    mov     rsi, rdx          ; rsi = hash
-    call    string_proc_node_create
+    ; malloc(sizeof(string_proc_node)) = 32 bytes
+    mov     edi, 32
+    call    malloc
     test    rax, rax
-    je      .L_return         ; si node == NULL, salimos
+    je      .return_null_node
 
-    ; 3) if (list->first == NULL) { … } else { … }
-    mov     rcx, [rdi]        ; rcx = list->first
-    test    rcx, rcx
-    jne     .L_append         ; si no está vacío, ir a enlazar al final
-
-    ; 3a) lista vacía:
-    ;     list->first = node;
-    ;     list->last  = node;
-    mov     [rdi], rax        ; list->first = node
-    mov     [rdi + 8], rax    ; list->last  = node
-    jmp     .L_return
-
-.L_append:
-    ; 3b) lista no vacía: enlazamos al final
-    ;    list->last->next     = node;
-    ;    node->previous       = list->last;
-    ;    list->last           = node;
-    mov     rcx, [rdi + 8]    ; rcx = list->last
-    mov     [rcx], rax        ; rcx->next = node
-    mov     [rax + 8], rcx    ; node->previous = rcx
-    mov     [rdi + 8], rax    ; list->last = node
-
-.L_return:
-    pop     rbp
+    ; node->next     = NULL
+    mov     qword [rax + 0], 0
+    ; node->previous = NULL
+    mov     qword [rax + 8], 0
+    ; node->type     = type
+    mov     byte  [rax + 16], dl
+    ; node->hash     = hash
+    mov     qword [rax + 24], rcx
     ret
 
-string_proc_list_add_node:
-    endbr64                    ; CET entry (omit if you don't use CET)
-    push    rbp
-    mov     rbp, rsp
-    push    rbx                ; salvamos RBX (callee‑saved), lo usaremos para “list”
+.return_null_node:
+    xor     rax, rax
+    ret
 
-    ; ——————————————————————————————
-    ; 1) if (list == NULL) return;
-    ;    list está en RDI
-    mov     rbx, rdi           ; rbx ← list
+; -------------------------------------------------------------------------
+; string_proc_list_add_node_asm
+;   void string_proc_list_add_node_asm(string_proc_list* list, uint8_t type, char* hash)
+; -------------------------------------------------------------------------
+string_proc_list_add_node_asm:
+    push    rbx
+    mov     rbx, rdi        ; RBX = list*
+
+    ; if (list == NULL) return
     test    rbx, rbx
-    je      .L_return
+    je      .done_add
 
-    ; ——————————————————————————————
-    ; 2) node = string_proc_node_create(type, hash);
-    ;    preparar argumentos para la llamada:
-    ;      edi ← type  (desde RSI)
-    ;      rsi ← hash  (desde RDX)
-    mov     edi, esi           ; edi ← (uint32_t) type
-    mov     rsi, rdx           ; rsi ← hash (char*)
-    call    string_proc_node_create
-    test    rax, rax           ; ¿node == NULL?
-    je      .L_return
+    ; llamar a string_proc_node_create_asm(type, hash)
+    mov     edi, esi        ; edi = type
+    mov     rsi, rdx        ; rsi = hash
+    call    string_proc_node_create_asm
+    test    rax, rax
+    je      .done_add
 
-    ; ——————————————————————————————
-    ; 3) if (list->first == NULL) { … } else { … }
-    ;    list->first está en [rbx + 0]
-    mov     rcx, [rbx]         ; rcx ← list->first
+    ; RAX = new node, RBX = list*
+    ; si list->first == NULL
+    mov     rcx, [rbx + 0]
     test    rcx, rcx
-    jne     .L_append
+    je      .add_first
 
-    ; 3a) lista VACÍA:
-    ;     list->first = node;
-    ;     list->last  = node;
-    mov     [rbx], rax         ; list->first = node
-    mov     [rbx + 8], rax     ; list->last  = node
-    jmp     .L_return
+.non_empty_add:
+    ; list->last->next = node
+    mov     rcx, [rbx + 8]
+    mov     [rcx + 0], rax
+    ; node->previous = list->last
+    mov     [rax + 8], rcx
+    ; list->last = node
+    mov     [rbx + 8], rax
+    jmp     .done_add
 
-.L_append:
-    ; 3b) lista NO vacía:
-    ;     list->last->next = node;
-    ;     node->previous   = list->last;
-    ;     list->last       = node;
-    mov     rcx, [rbx + 8]     ; rcx ← list->last
-    mov     [rcx], rax         ; rcx->next = node
-    mov     [rax + 8], rcx     ; node->previous = rcx
-    mov     [rbx + 8], rax     ; list->last = node
+.add_first:
+    ; list->first = node
+    mov     [rbx + 0], rax
+    ; list->last = node
+    mov     [rbx + 8], rax
 
-.L_return:
+.done_add:
     pop     rbx
-    pop     rbp
     ret
-string_proc_list_concat:
-    endbr64
-    push    rbp
-    mov     rbp, rsp
-    push    rbx            ; callee‑saved para 'list'
-    push    r12            ; callee‑saved para 'type'
-    push    r13            ; callee‑saved para 'resultado'
 
-    ; 1) if (list==NULL || hash==NULL) return NULL;
-    mov     rbx, rdi       ; rbx = list
+; -------------------------------------------------------------------------
+; string_proc_list_concat_asm
+;   char* string_proc_list_concat_asm(string_proc_list* list, uint8_t type, char* hash)
+; -------------------------------------------------------------------------
+string_proc_list_concat_asm:
+    push    rbx
+    push    r12
+    push    r13
+    push    r14
+    push    r15
+
+    mov     rbx, rdi        ; list*
+    mov     r12b, sil       ; type
+    mov     r13, rdx        ; hash
+
+    ; if (list == NULL || hash == NULL) return NULL
     test    rbx, rbx
-    je      .L_ret_null
-    test    rdx, rdx       ; rdx = hash
-    je      .L_ret_null
+    je      .return_null_concat
+    test    r13, r13
+    je      .return_null_concat
 
-    ; 2) guardamos type en r12
-    movzx   r12, sil       ; r12 = (uint32_t) type
-
-    ; 3) malloc(strlen(hash)+1)
-    mov     rdi, rdx       ; arg strlen = hash
+    ; resultado = malloc(strlen(hash) + 1)
+    mov     rdi, r13
     call    strlen
     add     rax, 1
-    mov     rdi, rax       ; arg malloc = tamaño
+    mov     edi, eax
     call    malloc
     test    rax, rax
-    je      .L_ret_null
-    mov     r13, rax       ; r13 = resultado
+    je      .return_null_concat
+    mov     r14, rax        ; r14 = resultado
 
-    ; 4) strcpy(resultado, hash)
-    mov     rdi, r13
-    mov     rsi, rdx
+    ; strcpy(resultado, hash)
+    mov     rdi, r14
+    mov     rsi, r13
     call    strcpy
 
-    ; 5) actual = list->first
-    mov     rcx, [rbx]     ; offset 0 = first
+    ; actual = list->first
+    mov     r15, [rbx + 0]
 
-.L_loop:
-    test    rcx, rcx
-    je      .L_done
+.loop_concat:
+    test    r15, r15
+    je      .end_concat
 
     ; if (actual->type == type)
-    mov     dl, [rcx + 24] ; offset 24 = type
-    cmp     dl, r12b
-    jne     .L_next
+    mov     al, [r15 + 16]
+    cmp     al, r12b
+    jne     .next_node
 
     ; if (actual->hash != NULL)
-    mov     rsi, [rcx + 16] ; offset 16 = hash pointer
-    test    rsi, rsi
-    je      .L_next
+    mov     rdx, [r15 + 24]
+    test    rdx, rdx
+    je      .next_node
 
-    ; nuevo = str_concat(resultado, actual->hash)
-    mov     rdi, r13        ; primer arg = resultado
-    ; rsi ya = actual->hash
+    ; resultado_nuevo = str_concat(resultado, actual->hash)
+    mov     rdi, r14
+    mov     rsi, rdx
     call    str_concat
-
-    ; free(old resultado)
-    mov     rdi, r13
-    call    free
-
-    ; si falló la concatenación
     test    rax, rax
-    je      .L_ret_null
+    je      .return_null_concat
+    ; free(old resultado)
+    mov     rdx, r14
+    mov     rdi, rdx
+    call    free
+    mov     r14, rax        ; r14 = nuevo resultado
 
-    ; resultado = nuevo
-    mov     r13, rax
+.next_node:
+    ; actual = actual->next
+    mov     r15, [r15 + 0]
+    jmp     .loop_concat
 
-.L_next:
-    mov     rcx, [rcx]      ; actual = actual->next (offset 0)
-    jmp     .L_loop
+.end_concat:
+    mov     rax, r14
+    jmp     .epilogue
 
-.L_done:
-    mov     rax, r13        ; devolver resultado
-    jmp     .L_epilogue
+.return_null_concat:
+    xor     rax, rax
 
-.L_ret_null:
-    xor     rax, rax        ; devolver NULL
-
-.L_epilogue:
+.epilogue:
+    pop     r15
+    pop     r14
     pop     r13
     pop     r12
     pop     rbx
-    pop     rbp
     ret
