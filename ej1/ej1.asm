@@ -19,164 +19,209 @@ extern str_concat
 
 
 string_proc_list_create_asm:
-        push    rbp
-        mov     rbp, rsp
-        sub     rsp, 16
-        mov     edi, 16
-        call    malloc
-        mov     QWORD  [rbp-8], rax
-        cmp     QWORD  [rbp-8], 0
-        jne     .L2
-        mov     eax, 0
-        jmp     .L3
-.L2:
-        mov     rax, QWORD  [rbp-8]
-        mov     QWORD  [rax], 0
-        mov     rax, QWORD  [rbp-8]
-        mov     QWORD  [rax+8], 0
-        mov     rax, QWORD  [rbp-8]
-.L3:
-        leave
-        ret
+    endbr64                  ; instrucción CET (opcional)
+    push    rbp
+    mov     rbp, rsp
 
-string_proc_node_create_asm:
-        push    rbp
-        mov     rbp, rsp
-        sub     rsp, 32
-        mov     eax, edi
-        mov     QWORD  [rbp-32], rsi
-        mov     BYTE  [rbp-20], al
-        mov     edi, 32
-        call    malloc
-        mov     QWORD  [rbp-8], rax
-        cmp     QWORD  [rbp-8], 0
-        jne     .L5
-        mov     eax, 0
-        jmp     .L6
-.L5:
-        mov     rax, QWORD  [rbp-8]
-        movzx   edx, BYTE  [rbp-20]
-        mov     BYTE  [rax+16], dl
-        mov     rax, QWORD  [rbp-8]
-        mov     rdx, QWORD  [rbp-32]
-        mov     QWORD  [rax+24], rdx
-        mov     rax, QWORD  [rbp-8]
-        mov     QWORD  [rax], 0
-        mov     rax, QWORD  [rbp-8]
-        mov     QWORD  [rax+8], 0
-        mov     rax, QWORD  [rbp-8]
-.L6:
-        leave
-        ret
+    ; --- malloc(sizeof(string_proc_list)) ---
+    mov     edi, 16          ; tamaño: 2 punteros = 16 bytes
+    call    malloc
+    test    rax, rax
+    je      .L_null          ; si RAX==0, reserva falló
 
-string_proc_list_add_node_asm:
-        push    rbp
-        mov     rbp, rsp
-        sub     rsp, 48
-        mov     QWORD  [rbp-24], rdi
-        mov     eax, esi
-        mov     QWORD  [rbp-40], rdx
-        mov     BYTE  [rbp-28], al
-        movzx   eax, BYTE  [rbp-28]
-        mov     rdx, QWORD  [rbp-40]
-        mov     rsi, rdx
-        mov     edi, eax
-        call    string_proc_node_create_asm
-        mov     QWORD  [rbp-8], rax
-        cmp     QWORD  [rbp-8], 0
-        je      .L11
-        mov     rax, QWORD  [rbp-24]
-        mov     rax, QWORD  [rax+8]
-        test    rax, rax
-        jne     .L10
-        mov     rax, QWORD  [rbp-24]
-        mov     rdx, QWORD  [rbp-8]
-        mov     QWORD  [rax], rdx
-        mov     rax, QWORD  [rbp-24]
-        mov     rdx, QWORD  [rbp-8]
-        mov     QWORD  [rax+8], rdx
-        jmp     .L7
-.L10:
-        mov     rax, QWORD  [rbp-24]
-        mov     rax, QWORD  [rax+8]
-        mov     rdx, QWORD  [rbp-8]
-        mov     QWORD  [rax], rdx
-        mov     rax, QWORD  [rbp-24]
-        mov     rdx, QWORD  [rax+8]
-        mov     rax, QWORD  [rbp-8]
-        mov     QWORD  [rax+8], rdx
-        mov     rax, QWORD  [rbp-24]
-        mov     rdx, QWORD  [rbp-8]
-        mov     QWORD  [rax+8], rdx
-        jmp     .L7
-.L11:
-        nop
-.L7:
-        leave
-        ret
+    ; --- list->first = NULL ---
+    mov     QWORD [rax], 0
 
-string_proc_list_concat_asm:
-        push    rbp
-        mov     rbp, rsp
-        sub     rsp, 64
-        mov     QWORD  [rbp-40], rdi
-        mov     eax, esi
-        mov     QWORD  [rbp-56], rdx
-        mov     BYTE  [rbp-44], al
-        cmp     QWORD  [rbp-40], 0
-        je      .L13
-        cmp     QWORD  [rbp-56], 0
-        jne     .L14
-.L13:
-        mov     eax, 0
-        jmp     .L15
-.L14:
-        mov     rax, QWORD  [rbp-40]
-        mov     rax, QWORD  [rax]
-        mov     QWORD  [rbp-8], rax
-        mov     rax, QWORD  [rbp-56]
-        mov     rdi, rax
-        call    strlen
-        add     rax, 1
-        mov     rdi, rax
-        call    malloc
-        mov     QWORD  [rbp-16], rax
-        cmp     QWORD  [rbp-16], 0
-        jne     .L16
-        mov     eax, 0
-        jmp     .L15
-.L16:
-        mov     rdx, QWORD  [rbp-56]
-        mov     rax, QWORD  [rbp-16]
-        mov     rsi, rdx
-        mov     rdi, rax
-        call    strcpy
-        jmp     .L17
-.L19:
-        mov     rax, QWORD  [rbp-8]
-        movzx   eax, BYTE  [rax+16]
-        cmp     BYTE  [rbp-44], al
-        jne     .L18
-        mov     rax, QWORD  [rbp-8]
-        mov     rdx, QWORD  [rax+24]
-        mov     rax, QWORD  [rbp-16]
-        mov     rsi, rdx
-        mov     rdi, rax
-        call    str_concat
-        mov     QWORD  [rbp-24], rax
-        mov     rax, QWORD  [rbp-16]
-        mov     rdi, rax
-        call    free
-        mov     rax, QWORD  [rbp-24]
-        mov     QWORD  [rbp-16], rax
-.L18:
-        mov     rax, QWORD  [rbp-8]
-        mov     rax, QWORD  [rax]
-        mov     QWORD  [rbp-8], rax
-.L17:
-        cmp     QWORD  [rbp-8], 0
-        jne     .L19
-        mov     rax, QWORD  [rbp-16]
-.L15:
-        leave
-        ret
+    ; --- list->last = NULL ---
+    mov     QWORD [rax + 8], 0
+
+    jmp     .L_end
+
+.L_null:
+    xor     rax, rax         ; devuelve NULL
+
+.L_end:
+    pop     rbp
+    ret
+
+    
+string_proc_list_add_node:
+    endbr64                  ; instrucción CET (opcional)
+    push    rbp
+    mov     rbp, rsp
+
+    ; 1) if (list == NULL) return;
+    test    rdi, rdi
+    je      .L_return
+
+    ; 2) node = string_proc_node_create(type, hash);
+    ;    argumentos para la llamada:
+    ;      edi = (uint32_t) type  ← viene en sil (RSI low byte)
+    ;      rsi = hash pointer    ← viene en rdx
+    movzx   edi, sil          ; edi = zero-extend(type)
+    mov     rsi, rdx          ; rsi = hash
+    call    string_proc_node_create
+    test    rax, rax
+    je      .L_return         ; si node == NULL, salimos
+
+    ; 3) if (list->first == NULL) { … } else { … }
+    mov     rcx, [rdi]        ; rcx = list->first
+    test    rcx, rcx
+    jne     .L_append         ; si no está vacío, ir a enlazar al final
+
+    ; 3a) lista vacía:
+    ;     list->first = node;
+    ;     list->last  = node;
+    mov     [rdi], rax        ; list->first = node
+    mov     [rdi + 8], rax    ; list->last  = node
+    jmp     .L_return
+
+.L_append:
+    ; 3b) lista no vacía: enlazamos al final
+    ;    list->last->next     = node;
+    ;    node->previous       = list->last;
+    ;    list->last           = node;
+    mov     rcx, [rdi + 8]    ; rcx = list->last
+    mov     [rcx], rax        ; rcx->next = node
+    mov     [rax + 8], rcx    ; node->previous = rcx
+    mov     [rdi + 8], rax    ; list->last = node
+
+.L_return:
+    pop     rbp
+    ret
+
+string_proc_list_add_node:
+    endbr64                    ; CET entry (omit if you don't use CET)
+    push    rbp
+    mov     rbp, rsp
+    push    rbx                ; salvamos RBX (callee‑saved), lo usaremos para “list”
+
+    ; ——————————————————————————————
+    ; 1) if (list == NULL) return;
+    ;    list está en RDI
+    mov     rbx, rdi           ; rbx ← list
+    test    rbx, rbx
+    je      .L_return
+
+    ; ——————————————————————————————
+    ; 2) node = string_proc_node_create(type, hash);
+    ;    preparar argumentos para la llamada:
+    ;      edi ← type  (desde RSI)
+    ;      rsi ← hash  (desde RDX)
+    mov     edi, esi           ; edi ← (uint32_t) type
+    mov     rsi, rdx           ; rsi ← hash (char*)
+    call    string_proc_node_create
+    test    rax, rax           ; ¿node == NULL?
+    je      .L_return
+
+    ; ——————————————————————————————
+    ; 3) if (list->first == NULL) { … } else { … }
+    ;    list->first está en [rbx + 0]
+    mov     rcx, [rbx]         ; rcx ← list->first
+    test    rcx, rcx
+    jne     .L_append
+
+    ; 3a) lista VACÍA:
+    ;     list->first = node;
+    ;     list->last  = node;
+    mov     [rbx], rax         ; list->first = node
+    mov     [rbx + 8], rax     ; list->last  = node
+    jmp     .L_return
+
+.L_append:
+    ; 3b) lista NO vacía:
+    ;     list->last->next = node;
+    ;     node->previous   = list->last;
+    ;     list->last       = node;
+    mov     rcx, [rbx + 8]     ; rcx ← list->last
+    mov     [rcx], rax         ; rcx->next = node
+    mov     [rax + 8], rcx     ; node->previous = rcx
+    mov     [rbx + 8], rax     ; list->last = node
+
+.L_return:
+    pop     rbx
+    pop     rbp
+    ret
+string_proc_list_concat:
+    endbr64
+    push    rbp
+    mov     rbp, rsp
+    push    rbx            ; callee‑saved para 'list'
+    push    r12            ; callee‑saved para 'type'
+    push    r13            ; callee‑saved para 'resultado'
+
+    ; 1) if (list==NULL || hash==NULL) return NULL;
+    mov     rbx, rdi       ; rbx = list
+    test    rbx, rbx
+    je      .L_ret_null
+    test    rdx, rdx       ; rdx = hash
+    je      .L_ret_null
+
+    ; 2) guardamos type en r12
+    movzx   r12, sil       ; r12 = (uint32_t) type
+
+    ; 3) malloc(strlen(hash)+1)
+    mov     rdi, rdx       ; arg strlen = hash
+    call    strlen
+    add     rax, 1
+    mov     rdi, rax       ; arg malloc = tamaño
+    call    malloc
+    test    rax, rax
+    je      .L_ret_null
+    mov     r13, rax       ; r13 = resultado
+
+    ; 4) strcpy(resultado, hash)
+    mov     rdi, r13
+    mov     rsi, rdx
+    call    strcpy
+
+    ; 5) actual = list->first
+    mov     rcx, [rbx]     ; offset 0 = first
+
+.L_loop:
+    test    rcx, rcx
+    je      .L_done
+
+    ; if (actual->type == type)
+    mov     dl, [rcx + 24] ; offset 24 = type
+    cmp     dl, r12b
+    jne     .L_next
+
+    ; if (actual->hash != NULL)
+    mov     rsi, [rcx + 16] ; offset 16 = hash pointer
+    test    rsi, rsi
+    je      .L_next
+
+    ; nuevo = str_concat(resultado, actual->hash)
+    mov     rdi, r13        ; primer arg = resultado
+    ; rsi ya = actual->hash
+    call    str_concat
+
+    ; free(old resultado)
+    mov     rdi, r13
+    call    free
+
+    ; si falló la concatenación
+    test    rax, rax
+    je      .L_ret_null
+
+    ; resultado = nuevo
+    mov     r13, rax
+
+.L_next:
+    mov     rcx, [rcx]      ; actual = actual->next (offset 0)
+    jmp     .L_loop
+
+.L_done:
+    mov     rax, r13        ; devolver resultado
+    jmp     .L_epilogue
+
+.L_ret_null:
+    xor     rax, rax        ; devolver NULL
+
+.L_epilogue:
+    pop     r13
+    pop     r12
+    pop     rbx
+    pop     rbp
+    ret
