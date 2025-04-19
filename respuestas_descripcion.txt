@@ -1,0 +1,132 @@
+Santiago Ignacio Bunge sbunge@udesa.edu.ar
+
+**Phase_1:**
+lea    rsi,[rip+0xc7c62] # se le carga un valor al rsi por lo tanto veo que es.
+rsi = “Cada uno es como Dios le hizo, y aún peor muchas veces.”
+call   0x40228e <strings_not_equal>
+Reviso que hay en strings_not_equal, veo que pone eax en 1 si son distintos, 0 si son iguales.
+Si son iguales entonces hace el salto de jne y se saltea el explode_bomb
+Por lo tanto la contraseña debe ser 
+"Cada uno es como Dios lo hizo, y aún peor muchas veces."
+
+**Phase_2:**
+mov    esi,0x20
+call   4011c0 <_init+0x1c0>
+test   rax,rax
+je     401ea6
+Busca si hay un 0x20 en la entrada que es un “ “ en ascii por lo tanto se que debe tener un espacio
+mov    rbp,rax
+test   rax,rax
+je     401ea6 <phase_2+0x56>
+Se fija que la entrada no sea 0 si es 0 salta a explotar.
+call   406830 <__strtol>
+divide el input en dos separados
+lea    edi,[rbx+rax*1-0x20]
+call   401e0b <misterio> llama a misterio
+Para que no explote la suma de los dos número
+debe tener 11 bits 1 en binario que es 2079 en decimal, luego la multiplicación de los dos números debe ser negativa
+Por lo tanto una combinación posible es:
+2080 -1
+
+**Phase_3:**
+lea    rsi,[rip+0xc504e]        # 4c7099 <__rseq_flags+0x95>
+Veo que hay en que es “%s %d"
+call   4074a0 <__isoc99_sscanf>
+cmp    eax,0x2
+jne    4020d9 <phase_3+0xc9>
+Compara los términos del input con 2 si no es 2 salta a explotar.
+call   401ead <readlines>  veo que es readline y veo
+lea    rsi,[rip+0xc584c]        # 4c7723 <__PRETTY_FUNCTION__.20+0x111>
+lea    rdi,[rip+0xc51ae]        # 4c708c <__rseq_flags+0x88>
+Veo que hay en esas direcciones: “r” y “palabras.txt”
+Toma las palabras en max
+call   401f92 <cuenta> llama a la función cuenta que realiza una búsqueda binaria recursiva en un array de strings buscando el array de tu input y contabiliza en eax las iteraciones
+mov    ebx,eax
+cmp    eax,0x270f
+jle    4020e3 <phase_3+0xd3>
+Se fija que el resultado dado por cuenta sea mayor a 0x270f que en decimal es 9999 sino salta a explotar
+cmp    DWORD PTR [rsp],ebx 
+jne    4020ea <phase_3+0xda>
+El número ingresado debe ser igual a la salida de cuenta por lo tanto 
+Uso como entrada la palabra “caldear” elegida arbitrariamente y luego corro la bomba con gdb y pongo un breakpoint antes del salto, luego veo que valor tiene ebx y es 26404 que cumple ser mayor a 9999 por lo tanto este será mi segundo parámetro.
+caldear 26404
+
+**Phase_4:**
+En esta fase primero se ve:
+call   40226d <string_length>
+cmp    eax,0x6
+jne    402134 <phase_4+0x3e>
+Acá llama a una función string_length que cuenta la cantidad de caracteres de mi input y los guarda en eax. Luego cmp los compara con 6, si no son 6 entra al jump que se va a un explode_bomb.
+mov    ecx,0x0
+Luego arranca limpia eco que será utilizado como un acumulador
+lea    rsi,[rip+0xcbd05]        # 4cde20 <array.0>
+Veo que hay en 0x4cde20 y veo un array de 16 valores: 2 13 7 14 5 10 6 15 1 12 3 4 11 8 16 9
+Luego
+lea    rdi,[rbx+0x6]
+movzx  edx,BYTE PTR [rax]
+and    edx,0xf
+add    ecx,DWORD PTR [rsi+rdx*4]
+add    rax,0x1
+cmp    rax,rdi
+jne    40211b <phase_4+0x25>
+Es un loop que itera sobre los caracteres de mi input, a cada uno les hace una mascara 0xf (16 en decimal y 0000 1111 en binario) y el resultado que da es la posición que se suma al acumulador del array.
+Luego 
+cmp    ecx,0x30
+Compara el acumulador con 0x30 (48 en decimal) si no son iguales salta a explotar.
+Por lo tanto un posible input es 00011N ya que 0 después de la máscara es 0 y en el array toma valor 2 entonces 2+2+2 = 6
+Luego 1 después de la máscara es 1 y en el array es 13 entonces 13+13 = 26 
+Luego N ya que en ASCII es 0x4E después de aplicar la máscara es 0xE = 14 y en el array es 16
+Concluye en que 6 + 26 + 16 = 48 por lo tanto no explota.
+00011N
+
+**Secret_phase:**
+Veo que hay una Secret_phase luego de Phase_4 busco cuando entra y voy a la funcion phase_defused.
+xor    eax,eax
+cmp    DWORD PTR [rip+0xf8bf1],0x4        # 4fb1b8 <num_input_strings>
+je     4025e4 <phase_defused+0x42>
+veo que para entrar a Secret_phase debo haber cumplido las primeras 4 fases
+
+lea    r8,[rsp+0x10]
+lea    rsi,[rip+0xc4b49]        # 4c7146 <__rseq_flags+0x142>
+lea    rdi,[rip+0xf8cac]        # 4fb2b0 <input_strings+0xf0>
+call   4074a0 <__isoc99_sscanf>
+cmp    eax,0x3
+je     40261c <phase_defused+0x7a>
+
+busco que hay en 4c7146 y veo %s %d %s por lo tanto en la fase tres debo poner un string despues de mi string y mi numero
+si eax (cantidad de terminos) es igual a 3 salta a cargar un registro en rsi 
+
+lea    rsi,[rip+0xc4b27]        # 4c714f <__rseq_flags+0x14b>
+call   40228e <strings_not_equal>
+test   eax,eax
+jne    40260e <phase_defused+0x6c>
+
+veo que hay en el registo y dice "abrete_sesamo" 
+por lo tanto debo poner eso como tercer termino del input para entre en el salto y vaya a la <secret_phase>
+
+call   40245a <read_line>
+mov    rdi, rax
+mov    edx, 0xa
+mov    esi, 0x0
+call   406830 <__strtol>
+mov    ebx, eax
+lee el input como string y devuelve en RAX el puntero a ella.
+strtol convierte el string en entero y lo deja en EAX, de donde lo movemos a EBX
+sub    eax, 0x1
+cmp    eax, 0x3e8
+ja     4021d0 <secret_phase+0x4d>
+Entonces mi input debe estar entre 1 y 1000 para que la bomba no explote en este paso
+mov    esi, ebx
+lea    rdi, [rip+0xF703C]   ;# 4f91f0 <n1>
+call   402142 <fun7>
+test   eax, eax
+jne    4021d7 <secret_phase+0x54>
+Pasa n en ESI y la dirección de n1 (el nodo raíz) en RDI a la función fun7.
+fun7 busca recursivamente en un árbol binario de nodos 
+Si el puntero es NULL entonces devuelve –1.
+Carga value; si value == n entonces devuelve 0.
+Si value > n entonces va a la rama izquierda, duplica el resultado res = res*2
+Si value < n entonces va a la rama derecha, hace res = res*2+1
+eax debe ser 0 para que no explote
+Entonces busco que hay en la direccion 4f91f0 y lo utilizo como input
+En la direccion 4f91f0 esta el numero 36 que sera mi contraseña
